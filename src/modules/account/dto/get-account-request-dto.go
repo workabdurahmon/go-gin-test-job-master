@@ -18,6 +18,9 @@ const DEFAULT_ACCOUNT_OFFSET = 0
 var GetAvailableAccountSortField = map[string]string{
 	"id":         "account.id",
 	"updated_at": "account.updated_at",
+	"address":    "account.address",
+	"name":       "account.name",
+	"rank":       "account.rank",
 }
 
 var GetAvailableAccountSortFieldList = func() []string {
@@ -33,6 +36,7 @@ type GetAccountRequestDto struct {
 	Count   int                    `form:"count" json:"count" validate:"min=1,max=100" default:"100" example:"20"`
 	Status  entities.AccountStatus `form:"status" json:"status" validate:"omitempty,AccountStatusValidation" example:"On"`
 	OrderBy string                 `form:"orderBy" json:"orderBy" validate:"omitempty,max=255" example:"id ASC"`
+	Search  string                 `form:"search" json:"search" validate:"omitempty,max=255" example:"bitcoin"`
 }
 
 var getAccountRequestDtoValidator *validator.Validate
@@ -96,6 +100,8 @@ func GetAccountRequestDtoValidateErrorMessage(err validator.FieldError) string {
 	} else if err.Field() == "Status" && err.Tag() == "AccountStatusValidation" {
 		errorMessage = fmt.Sprintf("%s must be one of the next values: %s", err.Field(), strings.Join(entities.AccountStatusList, ","))
 	} else if err.Field() == "OrderBy" && err.Tag() == "max" {
+		errorMessage = fmt.Sprintf("%s must be shorter than or equal to %s characters", err.Field(), err.Param())
+	} else if err.Field() == "Search" && err.Tag() == "max" {
 		errorMessage = fmt.Sprintf("%s must be shorter than or equal to %s characters", err.Field(), err.Param())
 	} else {
 		errorMessage = errorMessages.DefaultFieldErrorMessage(err.Field())

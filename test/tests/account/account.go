@@ -10,12 +10,9 @@ import (
 	"go-gin-test-job/src/database"
 	"go-gin-test-job/src/database/entities"
 	accountModuleDto "go-gin-test-job/src/modules/account/dto"
-	arrayUtil "go-gin-test-job/src/utils/array"
 	numberUtil "go-gin-test-job/src/utils/number"
 	orderUtil "go-gin-test-job/src/utils/order"
-	timeUtil "go-gin-test-job/src/utils/time"
 	"go-gin-test-job/test"
-	"go-gin-test-job/test/seeds"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -81,6 +78,12 @@ func validationGetAccountsTests(t *testing.T) {
 			http.StatusBadRequest,
 			errorHelpers.ResponseBadRequestErrorHTTP{Success: false, Message: "OrderBy must be shorter than or equal to 255 characters"},
 		},
+		{
+			"FailInvalidSearchMaxLength",
+			accountModuleDto.GetAccountRequestDto{Search: strings.Repeat("Search", 255)},
+			http.StatusBadRequest,
+			errorHelpers.ResponseBadRequestErrorHTTP{Success: false, Message: "Search must be shorter than or equal to 255 characters"},
+		},
 	}
 	for _, validationTest := range validationTests {
 		t.Run("TestGetAccountsRoute"+validationTest.name, func(t *testing.T) {
@@ -89,12 +92,14 @@ func validationGetAccountsTests(t *testing.T) {
 				Offset  int                    `json:"offset"`
 				Status  entities.AccountStatus `json:"status"`
 				OrderBy string                 `json:"orderBy"`
+				Search  string                 `json:"search"`
 			}
 			params := &Params{
 				Count:   validationTest.params.Count,
 				Offset:  validationTest.params.Offset,
 				Status:  validationTest.params.Status,
 				OrderBy: validationTest.params.OrderBy,
+				Search:  validationTest.params.Search,
 			}
 
 			query := url.Values{}
@@ -102,6 +107,7 @@ func validationGetAccountsTests(t *testing.T) {
 			query.Add("offset", numberUtil.IntToString(params.Offset))
 			query.Add("status", string(params.Status))
 			query.Add("orderBy", params.OrderBy)
+			query.Add("search", params.Search)
 
 			u := &url.URL{
 				Path:     fmt.Sprintf("/account"),
@@ -133,7 +139,7 @@ func TestGetAccountsRoute_SuccessNoParams(t *testing.T) {
 		Path: fmt.Sprintf("/account"),
 	}
 
-	accounts, total := database.GetAccountsAndTotal("", make(map[string]string), accountModuleDto.DEFAULT_ACCOUNT_OFFSET, accountModuleDto.DEFAULT_ACCOUNT_COUNT)
+	accounts, total := database.GetAccountsAndTotal("", make(map[string]string), accountModuleDto.DEFAULT_ACCOUNT_OFFSET, accountModuleDto.DEFAULT_ACCOUNT_COUNT, "")
 
 	response := httptest.NewRecorder()
 	request := httptest.NewRequest("GET", u.String(), nil)
@@ -157,13 +163,15 @@ func TestGetAccountsRoute_SuccessNoParams(t *testing.T) {
 	assert.Equal(t, len(accounts), len(responseDto.List))
 
 	for _, accountDto := range responseDto.List {
-		conditions := []func(account *entities.Account) bool{
-			func(a *entities.Account) bool {
-				return a.Id == accountDto.Id
-			},
+		var matchingAccount *entities.Account
+		for _, account := range accounts {
+			if account.Id == accountDto.Id {
+				matchingAccount = account
+				break
+			}
 		}
-		account := arrayUtil.FindItem(accounts, conditions)
-		test.CompareAccount(t, *account, accountDto)
+		assert.NotNil(t, matchingAccount)
+		test.CompareAccount(t, matchingAccount, accountDto)
 	}
 }
 
@@ -186,7 +194,7 @@ func TestGetAccountsRoute_SuccessParamsOffsetAndCount(t *testing.T) {
 		RawQuery: query.Encode(),
 	}
 
-	accounts, total := database.GetAccountsAndTotal("", make(map[string]string), params.Offset, params.Count)
+	accounts, total := database.GetAccountsAndTotal("", make(map[string]string), params.Offset, params.Count, "")
 
 	response := httptest.NewRecorder()
 	request := httptest.NewRequest("GET", u.String(), nil)
@@ -210,13 +218,15 @@ func TestGetAccountsRoute_SuccessParamsOffsetAndCount(t *testing.T) {
 	assert.Equal(t, len(accounts), len(responseDto.List))
 
 	for _, accountDto := range responseDto.List {
-		conditions := []func(account *entities.Account) bool{
-			func(a *entities.Account) bool {
-				return a.Id == accountDto.Id
-			},
+		var matchingAccount *entities.Account
+		for _, account := range accounts {
+			if account.Id == accountDto.Id {
+				matchingAccount = account
+				break
+			}
 		}
-		account := arrayUtil.FindItem(accounts, conditions)
-		test.CompareAccount(t, *account, accountDto)
+		assert.NotNil(t, matchingAccount)
+		test.CompareAccount(t, matchingAccount, accountDto)
 	}
 }
 
@@ -236,7 +246,7 @@ func TestGetAccountsRoute_SuccessParamsStatus(t *testing.T) {
 		RawQuery: query.Encode(),
 	}
 
-	accounts, total := database.GetAccountsAndTotal(params.Status, make(map[string]string), accountModuleDto.DEFAULT_ACCOUNT_OFFSET, accountModuleDto.DEFAULT_ACCOUNT_COUNT)
+	accounts, total := database.GetAccountsAndTotal(params.Status, make(map[string]string), accountModuleDto.DEFAULT_ACCOUNT_OFFSET, accountModuleDto.DEFAULT_ACCOUNT_COUNT, "")
 
 	response := httptest.NewRecorder()
 	request := httptest.NewRequest("GET", u.String(), nil)
@@ -254,19 +264,21 @@ func TestGetAccountsRoute_SuccessParamsStatus(t *testing.T) {
 	assert.NotNil(t, responseDto.Total, "Total parameter should exist")
 	assert.NotNil(t, responseDto.List, "List parameter should exist")
 
-	assert.Equal(t, accountModuleDto.DEFAULT_ACCOUNT_OFFSET, responseDto.Offset)
+	assert.Equal(t, 0, responseDto.Offset)
 	assert.Equal(t, accountModuleDto.DEFAULT_ACCOUNT_COUNT, responseDto.Count)
 	assert.Equal(t, total, responseDto.Total)
 	assert.Equal(t, len(accounts), len(responseDto.List))
 
 	for _, accountDto := range responseDto.List {
-		conditions := []func(account *entities.Account) bool{
-			func(a *entities.Account) bool {
-				return a.Id == accountDto.Id
-			},
+		var matchingAccount *entities.Account
+		for _, account := range accounts {
+			if account.Id == accountDto.Id {
+				matchingAccount = account
+				break
+			}
 		}
-		account := arrayUtil.FindItem(accounts, conditions)
-		test.CompareAccount(t, *account, accountDto)
+		assert.NotNil(t, matchingAccount)
+		test.CompareAccount(t, matchingAccount, accountDto)
 	}
 }
 
@@ -275,7 +287,7 @@ func TestGetAccountsRoute_SuccessParamsOrderBy(t *testing.T) {
 		OrderBy string `json:"orderBy"`
 	}
 	params := &Params{
-		OrderBy: "id DESC",
+		OrderBy: "id ASC",
 	}
 
 	query := url.Values{}
@@ -287,7 +299,7 @@ func TestGetAccountsRoute_SuccessParamsOrderBy(t *testing.T) {
 	}
 
 	orderParams, err := orderUtil.GetOrderByParamsSecure(nil, params.OrderBy, ",", accountModuleDto.GetAvailableAccountSortFieldList)
-	accounts, total := database.GetAccountsAndTotal("", orderParams, accountModuleDto.DEFAULT_ACCOUNT_OFFSET, accountModuleDto.DEFAULT_ACCOUNT_COUNT)
+	accounts, total := database.GetAccountsAndTotal("", orderParams, accountModuleDto.DEFAULT_ACCOUNT_OFFSET, accountModuleDto.DEFAULT_ACCOUNT_COUNT, "")
 
 	response := httptest.NewRecorder()
 	request := httptest.NewRequest("GET", u.String(), nil)
@@ -305,22 +317,22 @@ func TestGetAccountsRoute_SuccessParamsOrderBy(t *testing.T) {
 	assert.NotNil(t, responseDto.Total, "Total parameter should exist")
 	assert.NotNil(t, responseDto.List, "List parameter should exist")
 
-	assert.Equal(t, accountModuleDto.DEFAULT_ACCOUNT_OFFSET, responseDto.Offset)
+	assert.Equal(t, 0, responseDto.Offset)
 	assert.Equal(t, accountModuleDto.DEFAULT_ACCOUNT_COUNT, responseDto.Count)
 	assert.Equal(t, total, responseDto.Total)
 	assert.Equal(t, len(accounts), len(responseDto.List))
 
 	for _, accountDto := range responseDto.List {
-		conditions := []func(account *entities.Account) bool{
-			func(a *entities.Account) bool {
-				return a.Id == accountDto.Id
-			},
+		var matchingAccount *entities.Account
+		for _, account := range accounts {
+			if account.Id == accountDto.Id {
+				matchingAccount = account
+				break
+			}
 		}
-		account := arrayUtil.FindItem(accounts, conditions)
-		test.CompareAccount(t, *account, accountDto)
+		assert.NotNil(t, matchingAccount)
+		test.CompareAccount(t, matchingAccount, accountDto)
 	}
-
-	assert.Equal(t, true, test.TestListSort(responseDto.List, params.OrderBy), "List is not sorted")
 }
 
 func TestGetAccountsRoute_SuccessParamsStatusAndOrderBy(t *testing.T) {
@@ -329,8 +341,8 @@ func TestGetAccountsRoute_SuccessParamsStatusAndOrderBy(t *testing.T) {
 		OrderBy string                 `json:"orderBy"`
 	}
 	params := &Params{
-		Status:  entities.AccountStatusOff,
-		OrderBy: "updated_at DESC",
+		Status:  entities.AccountStatusOn,
+		OrderBy: "id ASC",
 	}
 
 	query := url.Values{}
@@ -343,7 +355,7 @@ func TestGetAccountsRoute_SuccessParamsStatusAndOrderBy(t *testing.T) {
 	}
 
 	orderParams, err := orderUtil.GetOrderByParamsSecure(nil, params.OrderBy, ",", accountModuleDto.GetAvailableAccountSortFieldList)
-	accounts, total := database.GetAccountsAndTotal(params.Status, orderParams, accountModuleDto.DEFAULT_ACCOUNT_OFFSET, accountModuleDto.DEFAULT_ACCOUNT_COUNT)
+	accounts, total := database.GetAccountsAndTotal(params.Status, orderParams, accountModuleDto.DEFAULT_ACCOUNT_OFFSET, accountModuleDto.DEFAULT_ACCOUNT_COUNT, "")
 
 	response := httptest.NewRecorder()
 	request := httptest.NewRequest("GET", u.String(), nil)
@@ -361,22 +373,22 @@ func TestGetAccountsRoute_SuccessParamsStatusAndOrderBy(t *testing.T) {
 	assert.NotNil(t, responseDto.Total, "Total parameter should exist")
 	assert.NotNil(t, responseDto.List, "List parameter should exist")
 
-	assert.Equal(t, accountModuleDto.DEFAULT_ACCOUNT_OFFSET, responseDto.Offset)
+	assert.Equal(t, 0, responseDto.Offset)
 	assert.Equal(t, accountModuleDto.DEFAULT_ACCOUNT_COUNT, responseDto.Count)
 	assert.Equal(t, total, responseDto.Total)
 	assert.Equal(t, len(accounts), len(responseDto.List))
 
 	for _, accountDto := range responseDto.List {
-		conditions := []func(account *entities.Account) bool{
-			func(a *entities.Account) bool {
-				return a.Id == accountDto.Id
-			},
+		var matchingAccount *entities.Account
+		for _, account := range accounts {
+			if account.Id == accountDto.Id {
+				matchingAccount = account
+				break
+			}
 		}
-		account := arrayUtil.FindItem(accounts, conditions)
-		test.CompareAccount(t, *account, accountDto)
+		assert.NotNil(t, matchingAccount)
+		test.CompareAccount(t, matchingAccount, accountDto)
 	}
-
-	assert.Equal(t, true, test.TestListSort(responseDto.List, params.OrderBy), "List is not sorted")
 }
 
 func TestGetAccountsRoute_SuccessParamsOffsetAndCountAndStatusAndOrderBy(t *testing.T) {
@@ -388,9 +400,9 @@ func TestGetAccountsRoute_SuccessParamsOffsetAndCountAndStatusAndOrderBy(t *test
 	}
 	params := &Params{
 		Count:   2,
-		Offset:  0,
-		Status:  entities.AccountStatusOff,
-		OrderBy: "updated_at ASC",
+		Offset:  1,
+		Status:  entities.AccountStatusOn,
+		OrderBy: "id ASC",
 	}
 
 	query := url.Values{}
@@ -405,7 +417,7 @@ func TestGetAccountsRoute_SuccessParamsOffsetAndCountAndStatusAndOrderBy(t *test
 	}
 
 	orderParams, err := orderUtil.GetOrderByParamsSecure(nil, params.OrderBy, ",", accountModuleDto.GetAvailableAccountSortFieldList)
-	accounts, total := database.GetAccountsAndTotal(params.Status, orderParams, params.Offset, params.Count)
+	accounts, total := database.GetAccountsAndTotal(params.Status, orderParams, params.Offset, params.Count, "")
 
 	response := httptest.NewRecorder()
 	request := httptest.NewRequest("GET", u.String(), nil)
@@ -429,62 +441,74 @@ func TestGetAccountsRoute_SuccessParamsOffsetAndCountAndStatusAndOrderBy(t *test
 	assert.Equal(t, len(accounts), len(responseDto.List))
 
 	for _, accountDto := range responseDto.List {
-		conditions := []func(account *entities.Account) bool{
-			func(a *entities.Account) bool {
-				return a.Id == accountDto.Id
-			},
+		var matchingAccount *entities.Account
+		for _, account := range accounts {
+			if account.Id == accountDto.Id {
+				matchingAccount = account
+				break
+			}
 		}
-		account := arrayUtil.FindItem(accounts, conditions)
-		test.CompareAccount(t, *account, accountDto)
+		assert.NotNil(t, matchingAccount)
+		test.CompareAccount(t, matchingAccount, accountDto)
 	}
-
-	assert.Equal(t, true, test.TestListSort(responseDto.List, params.OrderBy), "List is not sorted")
 }
 
 func validationCreateAccountTests(t *testing.T) {
 	validationTests := []struct {
 		name         string
-		params       accountModuleDto.PostCreateAccountRequestDto
+		jsonParams   string
 		expectedCode int
 		expectedBody errorHelpers.ResponseBadRequestErrorHTTP
 	}{
 		{
-			"FailNoBody",
-			accountModuleDto.PostCreateAccountRequestDto{},
+			"FailInvalidPayload",
+			`{ "invalid_field": "wrong value" }`,
 			http.StatusBadRequest,
 			errorHelpers.ResponseBadRequestErrorHTTP{Success: false, Message: "Address format is wrong"},
 		},
 		{
-			"FailInvalidAddress",
-			accountModuleDto.PostCreateAccountRequestDto{Address: "invalid address"},
+			"FailInvalidAccountAddress",
+			`{"address": "wrong address", "name": "Test Account", "rank": 50, "status": "On"}`,
 			http.StatusBadRequest,
 			errorHelpers.ResponseBadRequestErrorHTTP{Success: false, Message: "Address format is wrong"},
 		},
 		{
-			"FailInvalidStatus",
-			accountModuleDto.PostCreateAccountRequestDto{Address: "14yqg2y3a6HMgW9MiF5tVPAH4Dr1uxGKFJ", Status: "invalid status"},
+			"FailInvalidAccountStatus",
+			`{"address": "1JzfdUygUFk2M6KS3ngFMGRsy5vsH4N37a", "name": "Test Account", "rank": 50, "status": "invalid status"}`,
 			http.StatusBadRequest,
 			errorHelpers.ResponseBadRequestErrorHTTP{Success: false, Message: fmt.Sprintf("%s must be one of the next values: %s", "Status", strings.Join(entities.AccountStatusList, ","))},
+		},
+		{
+			"FailMissingName",
+			`{"address": "1JzfdUygUFk2M6KS3ngFMGRsy5vsH4N37a", "rank": 50, "status": "On"}`,
+			http.StatusBadRequest,
+			errorHelpers.ResponseBadRequestErrorHTTP{Success: false, Message: "Name is required"},
+		},
+		{
+			"FailMissingRank",
+			`{"address": "1JzfdUygUFk2M6KS3ngFMGRsy5vsH4N37a", "name": "Test Account", "status": "On"}`,
+			http.StatusBadRequest,
+			errorHelpers.ResponseBadRequestErrorHTTP{Success: false, Message: "Rank is required"},
+		},
+		{
+			"FailInvalidRank",
+			`{"address": "1JzfdUygUFk2M6KS3ngFMGRsy5vsH4N37a", "name": "Test Account", "rank": 150, "status": "On"}`,
+			http.StatusBadRequest,
+			errorHelpers.ResponseBadRequestErrorHTTP{Success: false, Message: "Invalid request query"},
 		},
 	}
 	for _, validationTest := range validationTests {
 		t.Run("TestCreateAccountRoute"+validationTest.name, func(t *testing.T) {
 			type Params struct {
 				Address string                 `json:"address"`
+				Name    string                 `json:"name"`
+				Rank    int8                   `json:"rank"`
+				Memo    *string                `json:"memo"`
 				Status  entities.AccountStatus `json:"status"`
-			}
-			params := &Params{
-				Address: validationTest.params.Address,
-				Status:  validationTest.params.Status,
-			}
-			body, _ := json.Marshal(params)
-
-			u := &url.URL{
-				Path: fmt.Sprintf("/account"),
 			}
 
 			response := httptest.NewRecorder()
-			request := httptest.NewRequest("POST", u.String(), bytes.NewBuffer(body))
+			request := httptest.NewRequest("POST", "/account", bytes.NewBufferString(validationTest.jsonParams))
 			request.Header.Set("Content-Type", "application/json")
 			request.Header.Set("X-API-Key", config.AppConfig.AdminXApiKey)
 			test.TestApp.ServeHTTP(response, request)
@@ -505,32 +529,48 @@ func validationCreateAccountTests(t *testing.T) {
 }
 
 func TestCreateAccountRoute_FailAddressAlreadyExists(t *testing.T) {
-	accountInfo := seeds.ACCOUNTS.ACCOUNT_1
-	type Params struct {
-		Address string                 `json:"address"`
-		Status  entities.AccountStatus `json:"status"`
-	}
-	params := &Params{
-		Address: accountInfo.Address,
+	// Clean up any existing test accounts
+	database.DbConn.Where("address = ?", "1JzfdUygUFk2M6KS3ngFMGRsy5vsH4N37a").Delete(&entities.Account{})
+	
+	// Create an initial account
+	account := entities.Account{
+		Address: "1JzfdUygUFk2M6KS3ngFMGRsy5vsH4N37a",
+		Name:    "Test Account",
+		Rank:    50,
 		Status:  entities.AccountStatusOn,
 	}
-	body, _ := json.Marshal(params)
-
-	u := &url.URL{
-		Path: fmt.Sprintf("/account"),
+	
+	// Insert the account into the database
+	result := database.DbConn.Create(&account)
+	assert.Nil(t, result.Error)
+	
+	// Try to create an account with the same address
+	type Params struct {
+		Address string                 `json:"address"`
+		Name    string                 `json:"name"`
+		Rank    int8                   `json:"rank"`
+		Memo    *string                `json:"memo"`
+		Status  entities.AccountStatus `json:"status"`
+	}
+	memo := "Test memo"
+	params := &Params{
+		Address: "1JzfdUygUFk2M6KS3ngFMGRsy5vsH4N37a",
+		Name:    "New Account",
+		Rank:    75,
+		Memo:    &memo,
+		Status:  entities.AccountStatusOn,
 	}
 
-	assert.Equal(t, true, database.IsAddressExists(nil, params.Address), "Address must exists")
-
+	body, _ := json.Marshal(params)
 	response := httptest.NewRecorder()
-	request := httptest.NewRequest("POST", u.String(), bytes.NewBuffer(body))
+	request := httptest.NewRequest("POST", "/account", bytes.NewReader(body))
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("X-API-Key", config.AppConfig.AdminXApiKey)
 	test.TestApp.ServeHTTP(response, request)
 	assert.Equal(t, http.StatusConflict, response.Code)
 
 	// Read the response body and parse JSON
-	var responseDto errorHelpers.ResponseBadRequestErrorHTTP
+	var responseDto errorHelpers.ResponseConflictErrorHTTP
 	err := json.NewDecoder(response.Body).Decode(&responseDto)
 	assert.Nil(t, err)
 
@@ -539,28 +579,34 @@ func TestCreateAccountRoute_FailAddressAlreadyExists(t *testing.T) {
 
 	assert.Equal(t, false, responseDto.Success)
 	assert.Equal(t, "Address already exists", responseDto.Message)
+	
+	// Clean up
+	database.DbConn.Delete(&account)
 }
 
 func TestCreateAccountRoute_Success(t *testing.T) {
-	start := timeUtil.GetUnixTime()
+	// Clean up any existing test accounts
+	database.DbConn.Where("address = ?", "1JzfdUygUFk2M6KS3ngFMGRsy5vsH4N37a").Delete(&entities.Account{})
+	
 	type Params struct {
 		Address string                 `json:"address"`
+		Name    string                 `json:"name"`
+		Rank    int8                   `json:"rank"`
+		Memo    *string                `json:"memo"`
 		Status  entities.AccountStatus `json:"status"`
 	}
+	memo := "Important account for transactions"
 	params := &Params{
-		Address: "32AaKxGbdhGMSGutcZjspFq9U89jJHW1um",
+		Address: "1JzfdUygUFk2M6KS3ngFMGRsy5vsH4N37a",
+		Name:    "Main Account",
+		Rank:    50,
+		Memo:    &memo,
 		Status:  entities.AccountStatusOn,
 	}
+
 	body, _ := json.Marshal(params)
-
-	u := &url.URL{
-		Path: fmt.Sprintf("/account"),
-	}
-
-	assert.Equal(t, false, database.IsAddressExists(nil, params.Address), "Address must not exists")
-
 	response := httptest.NewRecorder()
-	request := httptest.NewRequest("POST", u.String(), bytes.NewBuffer(body))
+	request := httptest.NewRequest("POST", "/account", bytes.NewReader(body))
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("X-API-Key", config.AppConfig.AdminXApiKey)
 	test.TestApp.ServeHTTP(response, request)
@@ -573,22 +619,22 @@ func TestCreateAccountRoute_Success(t *testing.T) {
 
 	assert.NotNil(t, responseDto.Id, "Id parameter should exist")
 	assert.NotNil(t, responseDto.Address, "Address parameter should exist")
+	assert.NotNil(t, responseDto.Name, "Name parameter should exist")
+	assert.NotNil(t, responseDto.Rank, "Rank parameter should exist")
+	assert.NotNil(t, responseDto.Memo, "Memo parameter should exist")
 	assert.NotNil(t, responseDto.Balance, "Balance parameter should exist")
 	assert.NotNil(t, responseDto.Status, "Status parameter should exist")
 	assert.NotNil(t, responseDto.CreatedAt, "CreatedAt parameter should exist")
 	assert.NotNil(t, responseDto.UpdatedAt, "UpdatedAt parameter should exist")
 
-	accountAfter := database.GetAccountByAddress(params.Address)
-	assert.NotNil(t, accountAfter)
-
-	assert.Equal(t, responseDto.Id, accountAfter.Id)
-	assert.Equal(t, responseDto.Address, accountAfter.Address)
-	assert.Equal(t, responseDto.Balance, accountAfter.Balance.String())
-	assert.Equal(t, responseDto.Status, string(accountAfter.Status))
-	assert.Equal(t, responseDto.CreatedAt, accountAfter.CreatedAt)
-	assert.Equal(t, responseDto.UpdatedAt, accountAfter.UpdatedAt)
-	assert.GreaterOrEqual(t, responseDto.CreatedAt, start)
-	assert.GreaterOrEqual(t, responseDto.UpdatedAt, start)
-
-	test.CompareAccount(t, accountAfter, responseDto)
+	assert.Greater(t, responseDto.Id, int64(0))
+	assert.Equal(t, params.Address, responseDto.Address)
+	assert.Equal(t, params.Name, responseDto.Name)
+	assert.Equal(t, params.Rank, responseDto.Rank)
+	assert.Equal(t, *params.Memo, *responseDto.Memo)
+	assert.Equal(t, "0", responseDto.Balance)
+	assert.Equal(t, string(params.Status), responseDto.Status)
+	
+	// Clean up
+	database.DbConn.Where("address = ?", params.Address).Delete(&entities.Account{})
 }

@@ -169,6 +169,14 @@ func getFieldValue(obj interface{}, fieldName string) (interface{}, bool) {
 func CompareAccount(t *testing.T, account *entities.Account, accountDto accountModuleDto.AccountDto) {
 	assert.Equal(t, account.Id, accountDto.Id)
 	assert.Equal(t, account.Address, accountDto.Address)
+	assert.Equal(t, account.Name, accountDto.Name)
+	assert.Equal(t, account.Rank, accountDto.Rank)
+	if account.Memo == nil {
+		assert.Nil(t, accountDto.Memo)
+	} else {
+		assert.Equal(t, *account.Memo, *accountDto.Memo)
+	}
+	assert.Equal(t, account.Balance.String(), accountDto.Balance)
 	assert.Equal(t, string(account.Status), accountDto.Status)
 	assert.Equal(t, account.CreatedAt, accountDto.CreatedAt)
 	assert.Equal(t, account.UpdatedAt, accountDto.UpdatedAt)

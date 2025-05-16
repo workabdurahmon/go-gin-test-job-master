@@ -8,17 +8,17 @@ import (
 	"gorm.io/gorm"
 )
 
-func getAccounts(status entities.AccountStatus, orderParams map[string]string, offset int, count int) ([]*entities.Account, int64) {
-	return database.GetAccountsAndTotal(status, orderParams, offset, count)
+func getAccounts(status entities.AccountStatus, orderParams map[string]string, offset int, count int, search string) ([]*entities.Account, int64) {
+	return database.GetAccountsAndTotal(status, orderParams, offset, count, search)
 }
 
-func createAccount(c *gin.Context, address string, status entities.AccountStatus) (*entities.Account, error) {
+func createAccount(c *gin.Context, address string, name string, rank int8, memo *string, status entities.AccountStatus) (*entities.Account, error) {
 	var account *entities.Account
 	transactionError := database.DbConn.Transaction(func(tx *gorm.DB) error {
 		if database.IsAddressExists(tx, address) {
 			return errorHelpers.RespondConflictError(c, "Address already exists")
 		}
-		newAccount, err := database.CreateAccount(tx, entities.CreateAccount(address, status))
+		newAccount, err := database.CreateAccount(tx, entities.CreateAccount(address, name, rank, memo, status))
 		if err != nil {
 			return err
 		}

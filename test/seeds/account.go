@@ -14,9 +14,15 @@ var ACCOUNTS struct {
 }
 
 func FillAccountList() []entities.Account {
+	memo1 := "This is the main account"
+	memo2 := "Secondary account for transactions"
+	
 	ACCOUNTS.ACCOUNT_1 = entities.Account{
 		Id:        1,
 		Address:   "3JTCWLKubxuuXXnmQPxx43nP2LJAcPSL1W",
+		Name:      "Main Account",
+		Rank:      90,
+		Memo:      &memo1,
 		Balance:   decimal.RequireFromString("0.96224397"),
 		Status:    entities.AccountStatusOn,
 		CreatedAt: timeUtil.GetUnixTime(),
@@ -25,6 +31,9 @@ func FillAccountList() []entities.Account {
 	ACCOUNTS.ACCOUNT_2 = entities.Account{
 		Id:        2,
 		Address:   "38JeTiYSS2Y4kSxNBNH6kmH5kjm8sodDvU",
+		Name:      "Secondary Account",
+		Rank:      75,
+		Memo:      &memo2,
 		Balance:   decimal.RequireFromString("0.00056665"),
 		Status:    entities.AccountStatusOn,
 		CreatedAt: timeUtil.GetUnixTime(),
@@ -33,6 +42,9 @@ func FillAccountList() []entities.Account {
 	ACCOUNTS.ACCOUNT_3 = entities.Account{
 		Id:        3,
 		Address:   "34bMmbjiiK5WfV2ZtgZGxLVYycJGNPEqjE",
+		Name:      "Reserve Account",
+		Rank:      50,
+		Memo:      nil,
 		Balance:   decimal.NewFromInt(0),
 		Status:    entities.AccountStatusOff,
 		CreatedAt: timeUtil.GetUnixTime(),
@@ -41,6 +53,9 @@ func FillAccountList() []entities.Account {
 	ACCOUNTS.ACCOUNT_4 = entities.Account{
 		Id:        4,
 		Address:   "1CmSPVJifmK3HXqy2tYgbTSb4eExK4wqYT",
+		Name:      "Backup Account",
+		Rank:      25,
+		Memo:      nil,
 		Balance:   decimal.RequireFromString("0.07134313"),
 		Status:    entities.AccountStatusOff,
 		CreatedAt: timeUtil.GetUnixTime(),
@@ -60,5 +75,29 @@ func GetAccountList() []entities.Account {
 		ACCOUNTS.ACCOUNT_2,
 		ACCOUNTS.ACCOUNT_3,
 		ACCOUNTS.ACCOUNT_4,
+	}
+}
+
+func SeedAccount(accounts []entities.Account) {
+	// Clear all accounts
+	ACCOUNTS = struct {
+		ACCOUNT_1 entities.Account
+		ACCOUNT_2 entities.Account
+		ACCOUNT_3 entities.Account
+		ACCOUNT_4 entities.Account
+	}{}
+	
+	// Add any new accounts
+	for i, account := range accounts {
+		switch i {
+		case 0:
+			ACCOUNTS.ACCOUNT_1 = account
+		case 1:
+			ACCOUNTS.ACCOUNT_2 = account
+		case 2:
+			ACCOUNTS.ACCOUNT_3 = account
+		case 3:
+			ACCOUNTS.ACCOUNT_4 = account
+		}
 	}
 }
